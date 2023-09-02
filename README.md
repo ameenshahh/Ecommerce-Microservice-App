@@ -1,2 +1,2 @@
-# Ecommerce-Microsservice-App
+# Ecommerce-Microservice-App
 An ecommerce application built with microservice architechture 
