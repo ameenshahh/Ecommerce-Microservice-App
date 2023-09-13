@@ -1,8 +1,8 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const axios = require('axios')
+const amqplib = require("amqplib");
 
-const { APP_SECRET } = require("../config");
+const { APP_SECRET, MESSAGE_BROKER_URL, EXCHANGE_NAME ,} = require("../config");
 
 //Utility functions
 module.exports.GenerateSalt = async () => {
@@ -34,7 +34,7 @@ module.exports.ValidateSignature = async (req) => {
   try {
     const signature = req.get("Authorization");
     console.log(signature);
-    const payload = await jwt.verify(signature.split(" ")[1], APP_SECRET);
+    const payload = jwt.verify(signature.split(" ")[1], APP_SECRET);
     req.user = payload;
     return true;
   } catch (error) {
@@ -51,16 +51,42 @@ module.exports.FormateData = (data) => {
   }
 };
 
-module.exports.PublishCustomerEvent = async(payload) =>{
-  // perform some operations
-  axios.post('http://localhost:8000/customer/app-events',{
-    payload
-  })
+
+/* ================== message broker ==================*/
+
+//create a channel
+module.exports.CreateChannel = async (data) => {
+  try {
+
+    const connection = await amqplib.connect(MESSAGE_BROKER_URL);
+    const channel = await connection.createChannel();
+    await channel.assertExchange(EXCHANGE_NAME, "direct", false);
+    return channel;
+  } catch (err) {
+    throw err;
+  }
 }
 
-module.exports.PublishShoppingEvent = async(payload) =>{
-  // perform some operations
-  axios.post('http://localhost:8000/shopping/app-events',{
-    payload
+//publish messages
+module.exports.PublishMessage = async (channel, binding_key, message) => {
+  try {
+    await channel.publish(EXCHANGE_NAME, binding_key, Buffer.from(message));
+    console.log(`message has been sent ${message}`)
+  } catch (err) {
+    throw err
+  }
+}
+
+//subscribe messages
+module.exports.SubscribeMessage = async (channel, service, binding_key) => {
+
+  const appQueue = await channel.assertQueue('QUEUE_NAME')
+
+  channel.bindQueue(appQueue.queue, EXCHANGE_NAME, binding_key)
+
+  channel.consume(appQueue.queue, data => {
+    console.log('Receivd data')
+    console.log(data.content.toString())
+    channel.ack(data)
   })
 }

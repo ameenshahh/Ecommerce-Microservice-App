@@ -1,12 +1,13 @@
-const bcrypt = require("bcryptjs");
+const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const amqplib = require("amqplib");
 
 const {
   APP_SECRET,
   EXCHANGE_NAME,
-  SHOPPING_SERVICE,
-  MSG_QUEUE_URL,
+  MESSAGE_BROKER_URL,
+  QUEUE_NAME,
+  SHOPPING_BINDING_KEY
 } = require("../config");
 
 //Utility functions
@@ -56,42 +57,41 @@ module.exports.FormateData = (data) => {
   }
 };
 
-//Message Broker
+/* ================== message broker ==================*/
 
-module.exports.CreateChannel = async () => {
+//create a channel
+module.exports.CreateChannel = async (data) => {
   try {
-    const connection = await amqplib.connect(MSG_QUEUE_URL);
+
+    const connection = await amqplib.connect(MESSAGE_BROKER_URL);
     const channel = await connection.createChannel();
-    await channel.assertQueue(EXCHANGE_NAME, "direct", { durable: true });
+    await channel.assertExchange(EXCHANGE_NAME, "direct", false);
     return channel;
   } catch (err) {
     throw err;
   }
-};
+}
 
-module.exports.PublishMessage = (channel, service, msg) => {
-  channel.publish(EXCHANGE_NAME, service, Buffer.from(msg));
-  console.log("Sent: ", msg);
-};
+//publish messages
+module.exports.PublishMessage = async (channel, binding_key, message) => {
+  try {
+    await channel.publish(EXCHANGE_NAME, binding_key, Buffer.from(message));
+    console.log(`message has been sent ${message}`)
+  } catch (err) {
+    throw err
+  }
+}
 
+//subscribe messages
 module.exports.SubscribeMessage = async (channel, service) => {
-  await channel.assertExchange(EXCHANGE_NAME, "direct", { durable: true });
-  const q = await channel.assertQueue("", { exclusive: true });
-  console.log(` Waiting for messages in queue: ${q.queue}`);
 
-  channel.bindQueue(q.queue, EXCHANGE_NAME, SHOPPING_SERVICE);
+  const appQueue = await channel.assertQueue(QUEUE_NAME)
 
-  channel.consume(
-    q.queue,
-    (msg) => {
-      if (msg.content) {
-        console.log("the message is:", msg.content.toString());
-        service.SubscribeEvents(msg.content.toString());
-      }
-      console.log("[X] received");
-    },
-    {
-      noAck: true,
-    }
-  );
-};
+  channel.bindQueue(appQueue.queue, EXCHANGE_NAME, SHOPPING_BINDING_KEY)
+
+  channel.consume(appQueue.queue, data => {
+    console.log('Receivd data in shopping service')
+    console.log(data.content.toString())
+    channel.ack(data)
+  })
+}
