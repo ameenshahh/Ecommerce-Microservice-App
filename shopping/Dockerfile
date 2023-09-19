@@ -1,4 +1,4 @@
-FROM node
+FROM stefanscherer/node-windows:latest
 
 WORKDIR /app/shopping
 
