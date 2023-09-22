@@ -4,10 +4,13 @@ const UserAuth = require("./middlewares/auth");
 const { SubscribeMessage } = require('../utils')
 
 module.exports = (app, channel) => {
+  
   const service = new CustomerService();
   SubscribeMessage(channel, service)
-
+  
   app.post("/signup", async (req, res, next) => {
+    console.log("customer module called");
+    console.log("received signup request");
     try {
       const { email, password, phone } = req.body;
       const { data } = await service.SignUp({ email, password, phone });
@@ -78,4 +81,8 @@ module.exports = (app, channel) => {
       next(err);
     }
   });
+
+  app.get("/test", ()=>{
+    console.log("route test");
+  })
 };
